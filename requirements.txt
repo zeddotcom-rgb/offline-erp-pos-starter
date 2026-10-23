@@ -1,0 +1,155 @@
+import json
+import tkinter as tk
+from tkinter import ttk, messagebox
+
+from database import init_db, get_connection
+from services.inventory_service import stock_report
+from services.pos_service import create_invoice
+from services.licensing import generate_machine_fingerprint, is_license_valid
+
+
+class ERPApp:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Offline ERP POS - Starter")
+        self.root.geometry("1200x760")
+        self.root.configure(bg="#f3f5f9")
+
+        init_db()
+        self.load_license_from_file()
+        self.build_ui()
+
+    def load_license_from_file(self):
+        try:
+            with open("license.json", "r", encoding="utf-8") as f:
+                self.license = json.load(f)
+            machine = generate_machine_fingerprint()
+            self.license_status = "VALID" if is_license_valid(self.license, machine) else "INVALID"
+        except FileNotFoundError:
+            self.license = None
+            self.license_status = "NO LICENSE"
+
+    def build_ui(self):
+        top = ttk.Frame(self.root, padding=10)
+        top.pack(fill="x")
+
+        ttk.Label(top, text="Offline ERP POS - Commercial Starter", font=("Segoe UI", 18, "bold")).pack(anchor="w")
+
+        status_color = "green" if self.license_status == "VALID" else "red"
+        ttk.Label(top, text=f"License: {self.license_status}", foreground=status_color).pack(anchor="w")
+
+        notebook = ttk.Notebook(self.root)
+        notebook.pack(fill="both", expand=True)
+
+        self.pos_tab = ttk.Frame(notebook)
+        self.stock_tab = ttk.Frame(notebook)
+        notebook.add(self.pos_tab, text="POS")
+        notebook.add(self.stock_tab, text="Inventory")
+
+        self.build_pos_tab()
+        self.build_inventory_tab()
+
+    def build_pos_tab(self):
+        frame = ttk.Frame(self.pos_tab, padding=10)
+        frame.pack(fill="both", expand=True)
+
+        left = ttk.LabelFrame(frame, text="Billing", padding=10)
+        left.pack(side="left", fill="both", expand=True)
+
+        ttk.Label(left, text="Item Code").grid(row=0, column=0, sticky="w")
+        self.item_code = ttk.Entry(left, width=30)
+        self.item_code.grid(row=0, column=1, padx=5, pady=5)
+
+        ttk.Button(left, text="Add Item", command=self.add_item_to_bill).grid(row=0, column=2, padx=5)
+
+        columns = ("Item", "Qty", "Rate", "Amount")
+        self.bill_tree = ttk.Treeview(left, columns=columns, show="headings", height=15)
+        for col in columns:
+            self.bill_tree.heading(col, text=col)
+            self.bill_tree.column(col, width=120)
+        self.bill_tree.grid(row=1, column=0, columnspan=3, sticky="nsew", pady=10)
+
+        self.total_var = tk.StringVar(value="0.00")
+        ttk.Label(left, text="Total").grid(row=2, column=0, sticky="w")
+        ttk.Label(left, textvariable=self.total_var, font=("Segoe UI", 12, "bold")).grid(row=2, column=1, sticky="w")
+
+        ttk.Button(left, text="Save Invoice", command=self.save_invoice).grid(row=3, column=0, pady=10)
+
+    def build_inventory_tab(self):
+        frame = ttk.Frame(self.stock_tab, padding=10)
+        frame.pack(fill="both", expand=True)
+
+        ttk.Button(frame, text="Refresh Stock", command=self.refresh_stock).pack(anchor="w")
+
+        columns = ("Code", "Name", "Qty", "Sale Price")
+        self.stock_tree = ttk.Treeview(frame, columns=columns, show="headings", height=18)
+        for col in columns:
+            self.stock_tree.heading(col, text=col)
+            self.stock_tree.column(col, width=180)
+        self.stock_tree.pack(fill="both", expand=True, pady=10)
+
+        self.refresh_stock()
+
+    def add_item_to_bill(self):
+        code = self.item_code.get().strip()
+        if not code:
+            return
+
+        conn = get_connection()
+        item = conn.execute("SELECT * FROM item WHERE code = ?", (code,)).fetchone()
+        conn.close()
+
+        if not item:
+            messagebox.showerror("Not found", "Item not found. Add it in inventory.")
+            return
+
+        self.bill_tree.insert("", "end", values=(item["name"], "1", f"{item['sale_price']}", str(float(item['sale_price']))))
+        self.item_code.delete(0, "end")
+        self.update_bill_total()
+
+    def update_bill_total(self):
+        total = 0.0
+        for row in self.bill_tree.get_children():
+            item = self.bill_tree.item(row, "values")
+            qty = float(item[1])
+            rate = float(item[2])
+            total += qty * rate
+        self.total_var.set(f"{total:.2f}")
+
+    def save_invoice(self):
+        if not self.bill_tree.get_children():
+            messagebox.showwarning("Empty Bill", "No items in the bill.")
+            return
+
+        invoice_no = f"INV-{__import__('time').time_ns()}"
+        items = []
+        for row in self.bill_tree.get_children():
+            item_values = self.bill_tree.item(row, "values")
+            name, qty, rate, _ = item_values
+            conn = get_connection()
+            item = conn.execute("SELECT id, code FROM item WHERE name = ?", (name,)).fetchone()
+            conn.close()
+            if item:
+                items.append({
+                    "item_id": item["id"],
+                    "qty": float(qty),
+                    "rate": float(rate),
+                    "discount": 0,
+                    "tax_rate": 0,
+                })
+
+        result = create_invoice(invoice_no, 1, items, payment_mode="cash")
+        messagebox.showinfo("Invoice Created", f"Invoice {invoice_no} saved. Total: {result['grand_total']}")
+        self.bill_tree.delete(*self.bill_tree.get_children())
+        self.total_var.set("0.00")
+
+    def refresh_stock(self):
+        self.stock_tree.delete(*self.stock_tree.get_children())
+        for row in stock_report():
+            self.stock_tree.insert("", "end", values=(row["code"], row["name"], row["stock_qty"], row["sale_price"]))
+
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    ERPApp(root)
+    root.mainloop()
