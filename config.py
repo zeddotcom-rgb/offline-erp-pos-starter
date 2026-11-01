@@ -18,10 +18,15 @@ DB_PATH = Path(os.environ.get("TRADEDESK_DB_PATH", str(DATA_DIR / "erp.db"))).ex
 # The verifier reads only a public key. Provision the vendor's public_key.pem next
 # to the executable, or override the path with TRADEDESK_LICENSE_PUBLIC_KEY.
 _embedded_public_key = Path(getattr(sys, "_MEIPASS", str(APP_DIR))) / "public_key.pem"
-_default_public_key = _embedded_public_key if _embedded_public_key.is_file() else APP_DIR / "public_key.pem"
-LICENSE_PUBLIC_KEY_PATH = Path(
-    os.environ.get("TRADEDESK_LICENSE_PUBLIC_KEY", str(_default_public_key))
-).expanduser()
+if FROZEN and _embedded_public_key.is_file():
+    # A packaged release must use its bundled trust anchor; do not allow an
+    # environment variable to replace the verification key in a frozen build.
+    LICENSE_PUBLIC_KEY_PATH = _embedded_public_key
+else:
+    _default_public_key = APP_DIR / "public_key.pem"
+    LICENSE_PUBLIC_KEY_PATH = Path(
+        os.environ.get("TRADEDESK_LICENSE_PUBLIC_KEY", str(_default_public_key))
+    ).expanduser()
 # The private key is only for the separate license-issuer tool and is never needed
 # by the customer application to validate a license.
 LICENSE_PRIVATE_KEY_PATH = Path(
