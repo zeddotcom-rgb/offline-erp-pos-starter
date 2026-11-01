@@ -5,9 +5,11 @@ from pathlib import Path
 import database
 from migrations import migrate
 from services.security_service import (
-    AuthenticationError, AuthorizationError, SetupAlreadyCompleted,
+    AuthenticationError, AuthorizationError, SetupAlreadyCompleted, Session,
     authenticate, create_initial_setup, require_permission, setup_is_complete,
 )
+from services.inventory_service import add_item, stock_report
+from services.pos_service import create_invoice
 
 
 class SecurityServiceTests(unittest.TestCase):
