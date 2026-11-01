@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS user_account (
     password_hash TEXT NOT NULL,
     role TEXT NOT NULL DEFAULT 'cashier',
     branch TEXT DEFAULT 'main',
-    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    is_active SMALLINT NOT NULL DEFAULT 1,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE TABLE IF NOT EXISTS customer (
