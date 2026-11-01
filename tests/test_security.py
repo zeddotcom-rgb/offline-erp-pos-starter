@@ -60,6 +60,30 @@ class SecurityServiceTests(unittest.TestCase):
         with self.assertRaises(AuthorizationError):
             require_permission(session, "users.write")
 
+    def test_forged_admin_role_is_not_trusted(self):
+        self.setup_admin()
+        conn = database.get_connection()
+        conn.execute("UPDATE user_account SET role='cashier' WHERE username='adminuser'")
+        conn.commit()
+        conn.close()
+        forged = Session(1, "adminuser", "admin", 1)
+        with self.assertRaises(AuthorizationError):
+            require_permission(forged, "users.write")
+
+    def test_inventory_and_pos_are_company_scoped(self):
+        session = self.setup_admin()
+        add_item("OWN-1", "Own Item", 10, stock_qty=5, session=session)
+        conn = database.get_connection()
+        conn.execute("INSERT INTO company(name) VALUES ('Other Co')")
+        other_company = conn.execute("SELECT id FROM company WHERE name='Other Co'").fetchone()["id"]
+        conn.execute("INSERT INTO item(code,name,sale_price,stock_qty,company_id) VALUES ('OTHER-1','Other Item',1,20,?)", (other_company,))
+        other_item_id = conn.execute("SELECT id FROM item WHERE code='OTHER-1'").fetchone()["id"]
+        conn.commit()
+        conn.close()
+        self.assertEqual([item["code"] for item in stock_report(session)], ["OWN-1"])
+        with self.assertRaises(ValueError):
+            create_invoice("CROSS-TENANT", None, [{"item_id": other_item_id, "qty": 1, "rate": 1}], session=session)
+
     def test_legacy_records_are_backfilled_during_setup(self):
         conn = database.get_connection()
         conn.execute("INSERT INTO item(code,name,stock_qty) VALUES ('OLD-1','Legacy Item',7)")
