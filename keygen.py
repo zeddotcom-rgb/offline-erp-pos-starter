@@ -11,20 +11,36 @@ from services.licensing import (
 
 def main():
     parser = argparse.ArgumentParser(description="Offline ERP license issuer (vendor-only)")
-    parser.add_argument("--customer", required=True)
-    parser.add_argument("--edition", required=True, choices=["starter", "professional", "enterprise"])
+    parser.add_argument("--customer")
+    parser.add_argument("--edition", choices=["starter", "professional", "enterprise"])
     parser.add_argument("--users", type=int, default=1)
     parser.add_argument("--days", type=int, default=365)
     parser.add_argument("--machine-fingerprint", help="Customer machine fingerprint; defaults to this machine")
     parser.add_argument("--output", default=str(LICENSE_FILE_PATH))
     parser.add_argument(
         "--generate-keypair", action="store_true",
-        help="Explicitly generate a new RSA keypair only when neither key file exists",
+        help="Generate a new RSA keypair before issuing (only when neither key file exists)",
+    )
+    parser.add_argument(
+        "--generate-keypair-only", action="store_true",
+        help="Generate the issuer keypair and exit without issuing a license",
     )
     args = parser.parse_args()
 
+    if args.generate_keypair_only:
+        try:
+            ensure_keys()
+        except RuntimeError as exc:
+            parser.error(str(exc))
+        print("Keypair ready. Keep private_key.pem offline and secret; distribute only public_key.pem.")
+        return
+    if not args.customer or not args.edition:
+        parser.error("--customer and --edition are required when issuing a license.")
     if args.generate_keypair:
-        ensure_keys()
+        try:
+            ensure_keys()
+        except RuntimeError as exc:
+            parser.error(str(exc))
         print("Keypair ready. Keep private_key.pem offline and secret; distribute only public_key.pem.")
     machine_fp = args.machine_fingerprint or generate_machine_fingerprint()
     try:
