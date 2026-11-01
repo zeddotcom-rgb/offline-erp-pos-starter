@@ -40,17 +40,25 @@ class PostgreSQLIntegrationTests(unittest.TestCase):
         from services.security_service import authenticate, create_initial_setup
         from services.inventory_service import add_item, stock_report
         from services.pos_service import create_invoice
+        from services.party_service import create_customer, create_supplier, list_customers, list_suppliers
+        from services.user_service import create_user, list_users
 
         session = create_initial_setup({"name": "PostgreSQL Integration Co"}, "pgadmin", "Postgres-test-password-1!")
         self.assertEqual(authenticate("PGADMIN", "Postgres-test-password-1!").company_id, session.company_id)
         item_id = add_item("PG-1", "PG Item", 12.5, stock_qty=4, session=session)
         self.assertEqual(stock_report(session)[0]["id"], item_id)
+        create_customer("PG Customer", session=session)
+        create_supplier("PG Supplier", session=session)
+        create_user("pgcashier", "Postgres-cashier-password-1!", role="cashier", session=session)
+        self.assertEqual([row["name"] for row in list_customers(session)], ["PG Customer"])
+        self.assertEqual([row["name"] for row in list_suppliers(session)], ["PG Supplier"])
+        self.assertIn("pgcashier", [row["username"] for row in list_users(session)])
         invoice = create_invoice("PG-INV-1", None, [{"item_id": item_id, "qty": 1, "rate": 12.5}], session=session)
         self.assertAlmostEqual(invoice["grand_total"], 12.5)
         conn = get_connection()
         try:
             audit_count = conn.execute("SELECT COUNT(*) AS n FROM audit_log WHERE company_id=?", (session.company_id,)).fetchone()["n"]
-            self.assertGreaterEqual(audit_count, 3)
+            self.assertGreaterEqual(audit_count, 6)
         finally:
             conn.close()
 
