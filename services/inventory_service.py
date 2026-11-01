@@ -47,7 +47,7 @@ def stock_report(session=None):
     conn = get_connection()
     try:
         rows = conn.execute("""SELECT id, code, name, stock_qty, sale_price FROM item
-            WHERE is_active=TRUE AND company_id=? ORDER BY name""", (actor.company_id,)).fetchall()
+            WHERE is_active=1 AND company_id=? ORDER BY name""", (actor.company_id,)).fetchall()
         return [dict(row) for row in rows]
     finally:
         conn.close()
