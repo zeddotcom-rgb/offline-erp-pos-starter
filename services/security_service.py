@@ -192,11 +192,10 @@ def require_permission(session: Session | dict[str, Any] | None, permission: str
 
 def audit_event(session: Session | dict[str, Any], action: str, entity_type: str,
                 entity_id: int | None = None, details: dict[str, Any] | None = None) -> None:
-    actor = require_permission(session, "audit.write") if isinstance(session, Session) and session.role != "admin" else session
-    if isinstance(actor, dict):
-        actor_id, company_id = int(actor["user_id"]), int(actor["company_id"])
-    else:
-        actor_id, company_id = actor.user_id, actor.company_id
+    # Only an authenticated administrator (the only role with audit.write) may
+    # invoke this generic event API. Never trust caller-supplied dict fields.
+    actor = require_permission(session, "audit.write")
+    actor_id, company_id = actor.user_id, actor.company_id
     conn = get_connection()
     try:
         conn.execute("""INSERT INTO audit_log(entity_type, entity_id, action, details, company_id, actor_id)
