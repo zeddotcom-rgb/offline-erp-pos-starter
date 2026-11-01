@@ -8,6 +8,7 @@ from __future__ import annotations
 import os
 import re
 import sqlite3
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -142,7 +143,10 @@ def table_exists(conn, table: str) -> bool:
 
 def init_db():
     schema_name = "schema_postgres.sql" if _backend() == "postgresql" else "schema.sql"
-    schema_path = Path(__file__).resolve().parent / schema_name
+    # PyInstaller --onefile extracts bundled data into sys._MEIPASS.
+    # Use that directory when frozen, and the source directory in development.
+    resource_dir = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
+    schema_path = resource_dir / schema_name
     schema = schema_path.read_text(encoding="utf-8")
     conn = get_connection()
     try:
