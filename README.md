@@ -44,6 +44,16 @@ GitHub Actions runs the SQLite unit suite on Python 3.11 and 3.12 and a PostgreS
 - Legacy user accounts are disabled during setup. Back up the database before upgrading and verify the migrated data before using it in production.
 - Usernames remain globally unique and case-insensitive because login is username-only (there is no company selector at sign-in). Migration v3 detects legacy case-variant duplicate usernames and stops with an actionable error rather than silently choosing an account.
 
+## License-key provisioning (release gate)
+The application fails closed when the issuer's `public_key.pem` is missing; it never creates a signing key during license verification. Before a commercial release:
+
+1. On a trusted vendor-only machine, generate the keypair once with `python keygen.py --customer "Key Setup" --edition professional --generate-keypair --machine-fingerprint "PLACEHOLDER"` only after confirming the command's issuer-side use. Do not issue the placeholder license.
+2. Keep `private_key.pem` offline, access-controlled and backed up. Never commit or distribute it.
+3. Provision the matching `public_key.pem` alongside the Windows executable (or set `TRADEDESK_LICENSE_PUBLIC_KEY` to its path).
+4. Issue each customer's license using their supplied machine fingerprint with `--machine-fingerprint`.
+
+No production public key is committed in this repository yet, so the CI executable artifact is a build/QA artifact and will not validate production licenses until the matching vendor public key is provisioned. The app's data and license files are stored in a persistent user-writable data directory when frozen; paths can be overridden with `TRADEDESK_DATA_DIR`, `TRADEDESK_DB_PATH`, and `TRADEDESK_LICENSE_FILE`.
+
 ## Windows executable
 The Windows workflow builds a one-file executable and uploads it as a GitHub Actions artifact. Use the workflow run's artifact download rather than treating a source ZIP as the executable.
 
