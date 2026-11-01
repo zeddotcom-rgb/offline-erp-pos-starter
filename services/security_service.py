@@ -173,6 +173,22 @@ def require_permission(session: Session | dict[str, Any] | None, permission: str
             session = Session(int(session["user_id"]), str(session["username"]), str(session["role"]), int(session["company_id"]))
         except (KeyError, TypeError, ValueError) as exc:
             raise AuthorizationError("Invalid session context.") from exc
+    # Treat the caller's session as an identifier, not as trusted authority.
+    # Reload role, active state, and tenant membership from the database on every
+    # service authorization check so a forged/stale in-memory role cannot grant access.
+    conn = get_connection()
+    try:
+        row = conn.execute(
+            "SELECT username, role, company_id, is_active FROM user_account WHERE id=?",
+            (session.user_id,),
+        ).fetchone()
+    finally:
+        conn.close()
+    if not row or not row["is_active"] or not row["company_id"]:
+        raise AuthorizationError("User is inactive or has no company membership.")
+    if int(row["company_id"]) != session.company_id:
+        raise AuthorizationError("Session company does not match the user's company.")
+    session = Session(session.user_id, row["username"], row["role"], int(row["company_id"]))
     allowed = ROLE_PERMISSIONS.get(session.role, set())
     if "*" not in allowed and permission not in allowed:
         raise AuthorizationError(f"Role '{session.role}' does not have permission '{permission}'.")
