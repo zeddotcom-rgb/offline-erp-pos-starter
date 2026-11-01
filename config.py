@@ -17,8 +17,10 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 DB_PATH = Path(os.environ.get("TRADEDESK_DB_PATH", str(DATA_DIR / "erp.db"))).expanduser()
 # The verifier reads only a public key. Provision the vendor's public_key.pem next
 # to the executable, or override the path with TRADEDESK_LICENSE_PUBLIC_KEY.
+_embedded_public_key = Path(getattr(sys, "_MEIPASS", str(APP_DIR))) / "public_key.pem"
+_default_public_key = _embedded_public_key if _embedded_public_key.is_file() else APP_DIR / "public_key.pem"
 LICENSE_PUBLIC_KEY_PATH = Path(
-    os.environ.get("TRADEDESK_LICENSE_PUBLIC_KEY", str(APP_DIR / "public_key.pem"))
+    os.environ.get("TRADEDESK_LICENSE_PUBLIC_KEY", str(_default_public_key))
 ).expanduser()
 # The private key is only for the separate license-issuer tool and is never needed
 # by the customer application to validate a license.
