@@ -50,7 +50,20 @@ class MigrationUpgradeTests(unittest.TestCase):
         finally:
             conn.close()
         self.assertIn("company_id", columns)
-        self.assertEqual(versions, {1, 2})
+        self.assertEqual(versions, {1, 2, 3})
+
+    def test_v3_refuses_case_ambiguous_usernames(self):
+        conn = database.get_connection()
+        try:
+            conn.execute("INSERT INTO user_account(username, password_hash) VALUES ('Alex', 'legacy')")
+            conn.execute("INSERT INTO user_account(username, password_hash) VALUES ('alex', 'legacy')")
+            conn.commit()
+        finally:
+            conn.close()
+        with self.assertRaisesRegex(RuntimeError, "differ only by letter case"):
+            migrate()
+
+
 
 
 if __name__ == "__main__":
