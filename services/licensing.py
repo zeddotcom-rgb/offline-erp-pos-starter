@@ -29,6 +29,15 @@ def ensure_keys():
     private_exists = LICENSE_PRIVATE_KEY_PATH.exists()
     public_exists = LICENSE_PUBLIC_KEY_PATH.exists()
     if private_exists and public_exists:
+        try:
+            private_key = load_pem_private_key(LICENSE_PRIVATE_KEY_PATH.read_bytes(), password=None)
+            public_key = load_pem_public_key(LICENSE_PUBLIC_KEY_PATH.read_bytes())
+            if private_key.public_key().public_numbers() != public_key.public_numbers():
+                raise ValueError("The private and public keys do not match.")
+        except Exception as exc:
+            raise RuntimeError(
+                "Existing license key files are invalid or mismatched. Restore a matching pair from secure backup."
+            ) from exc
         return
     if private_exists != public_exists:
         raise RuntimeError(
