@@ -57,8 +57,14 @@ class PostgreSQLIntegrationTests(unittest.TestCase):
         self.assertAlmostEqual(invoice["grand_total"], 12.5)
         conn = get_connection()
         try:
+            other_company = conn.execute("INSERT INTO company(name) VALUES ('Other PG Co')").lastrowid
+            conn.execute("""INSERT INTO item(code,name,stock_qty,company_id)
+                VALUES ('PG-1','Same Code, Other Tenant',2,?)""", (other_company,))
+            conn.execute("""INSERT INTO invoice(invoice_no,total_amount,grand_total,company_id)
+                VALUES ('PG-INV-1', 2, 2, ?)""", (other_company,))
             audit_count = conn.execute("SELECT COUNT(*) AS n FROM audit_log WHERE company_id=?", (session.company_id,)).fetchone()["n"]
             self.assertGreaterEqual(audit_count, 6)
+            conn.commit()
         finally:
             conn.close()
 
