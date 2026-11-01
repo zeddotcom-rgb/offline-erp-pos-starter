@@ -39,7 +39,7 @@ def create_invoice(invoice_no: str, customer_id: int | None, items: list,
             discount, tax_rate = float(entry.get("discount", 0)), float(entry.get("tax_rate", 0))
             if qty <= 0 or rate < 0 or discount < 0 or tax_rate < 0 or discount > qty * rate:
                 raise ValueError("Invalid quantity, rate, discount, or tax.")
-            item = conn.execute("SELECT stock_qty FROM item WHERE id=? AND company_id=? AND is_active=1",
+            item = conn.execute("SELECT stock_qty FROM item WHERE id=? AND company_id=? AND is_active=TRUE",
                                 (item_id, actor.company_id)).fetchone()
             if not item:
                 raise ValueError(f"Item {item_id} not found in this company.")
