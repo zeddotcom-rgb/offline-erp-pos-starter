@@ -1,2 +1,10 @@
-cryptography>=42.0.0
-python-dotenv>=1.0.1
+__pycache__/
+*.py[cod]
+*.db
+private_key.pem
+license.json
+.venv/
+venv/
+build/
+dist/
+*.spec
