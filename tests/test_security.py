@@ -1,0 +1,103 @@
+import tempfile
+import unittest
+from pathlib import Path
+
+import database
+from migrations import migrate
+from services.security_service import (
+    AuthenticationError, AuthorizationError, SetupAlreadyCompleted, Session,
+    authenticate, create_initial_setup, require_permission, setup_is_complete,
+)
+from services.inventory_service import add_item, stock_report
+from services.pos_service import create_invoice
+
+
+class SecurityServiceTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        database.DB_PATH = Path(self.temp.name) / "test.db"
+        database.init_db()
+        migrate()
+
+    def tearDown(self):
+        self.temp.cleanup()
+
+    def setup_admin(self):
+        return create_initial_setup(
+            {"name": "Example Co", "address": "Test Road"},
+            "adminuser", "Strong-password-123!"
+        )
+
+    def test_setup_is_one_time_and_creates_argon2_admin(self):
+        self.assertFalse(setup_is_complete())
+        session = self.setup_admin()
+        self.assertEqual(session.role, "admin")
+        self.assertTrue(setup_is_complete())
+        with self.assertRaises(SetupAlreadyCompleted):
+            self.setup_admin()
+        conn = database.get_connection()
+        stored = conn.execute("SELECT password_hash FROM user_account WHERE username='adminuser'").fetchone()["password_hash"]
+        conn.close()
+        self.assertTrue(stored.startswith("$argon2"))
+
+    def test_authentication_and_failed_login(self):
+        self.setup_admin()
+        session = authenticate("adminuser", "Strong-password-123!")
+        self.assertEqual(session.company_id, 1)
+        with self.assertRaises(AuthenticationError):
+            authenticate("adminuser", "wrong-password")
+        conn = database.get_connection()
+        count = conn.execute("SELECT COUNT(*) AS n FROM audit_log WHERE action='login_failed'").fetchone()["n"]
+        conn.close()
+        self.assertEqual(count, 1)
+
+    def test_permissions_are_enforced(self):
+        self.setup_admin()
+        conn = database.get_connection()
+        conn.execute("UPDATE user_account SET role='cashier' WHERE username='adminuser'")
+        conn.commit()
+        conn.close()
+        session = authenticate("adminuser", "Strong-password-123!")
+        self.assertEqual(require_permission(session, "pos.sell").role, "cashier")
+        with self.assertRaises(AuthorizationError):
+            require_permission(session, "users.write")
+
+    def test_forged_admin_role_is_not_trusted(self):
+        self.setup_admin()
+        conn = database.get_connection()
+        conn.execute("UPDATE user_account SET role='cashier' WHERE username='adminuser'")
+        conn.commit()
+        conn.close()
+        forged = Session(1, "adminuser", "admin", 1)
+        with self.assertRaises(AuthorizationError):
+            require_permission(forged, "users.write")
+
+    def test_inventory_and_pos_are_company_scoped(self):
+        session = self.setup_admin()
+        add_item("OWN-1", "Own Item", 10, stock_qty=5, session=session)
+        conn = database.get_connection()
+        conn.execute("INSERT INTO company(name) VALUES ('Other Co')")
+        other_company = conn.execute("SELECT id FROM company WHERE name='Other Co'").fetchone()["id"]
+        conn.execute("INSERT INTO item(code,name,sale_price,stock_qty,company_id) VALUES ('OTHER-1','Other Item',1,20,?)", (other_company,))
+        other_item_id = conn.execute("SELECT id FROM item WHERE code='OTHER-1'").fetchone()["id"]
+        conn.commit()
+        conn.close()
+        self.assertEqual([item["code"] for item in stock_report(session)], ["OWN-1"])
+        with self.assertRaises(ValueError):
+            create_invoice("CROSS-TENANT", None, [{"item_id": other_item_id, "qty": 1, "rate": 1}], session=session)
+
+    def test_legacy_records_are_backfilled_during_setup(self):
+        conn = database.get_connection()
+        conn.execute("INSERT INTO item(code,name,stock_qty) VALUES ('OLD-1','Legacy Item',7)")
+        conn.commit()
+        conn.close()
+        self.setup_admin()
+        conn = database.get_connection()
+        row = conn.execute("SELECT company_id, stock_qty FROM item WHERE code='OLD-1'").fetchone()
+        conn.close()
+        self.assertEqual(row["company_id"], 1)
+        self.assertEqual(row["stock_qty"], 7)
+
+
+if __name__ == "__main__":
+    unittest.main()

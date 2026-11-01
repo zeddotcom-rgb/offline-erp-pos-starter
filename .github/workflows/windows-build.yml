@@ -1,0 +1,25 @@
+name: Windows executable
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - "release/0.5.0-security-company-setup"
+    tags:
+      - "v0.5.0*"
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --upgrade pip
+      - run: pip install -r requirements.txt
+      - run: python -m unittest discover -s tests -v
+      - run: pyinstaller --noconfirm --clean --onefile --windowed --name TradeDeskPro app.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TradeDeskPro-Windows-x64
+          path: dist/TradeDeskPro.exe
+          if-no-files-found: error
