@@ -1,13 +1,14 @@
 # TradeDesk Pro 0.5.0 — Security & Company Setup
 
-Offline-first Windows desktop ERP/POS starter. This branch introduces a first-run company setup wizard, Argon2 administrator authentication, role permissions enforced by service methods, tenant-scoped inventory and invoices, audit events, and an idempotent SQLite schema migration.
+Offline-first Windows desktop ERP/POS starter with a selectable local SQLite or shared PostgreSQL database backend.
 
 ## Requirements
 - Python 3.11 or 3.12
-- SQLite (bundled with Python)
+- SQLite (included with Python) for offline/single-PC use
+- PostgreSQL 14+ for shared LAN/server mode
 - Packages in `requirements.txt`
 
-## Run on Windows
+## Run with SQLite on Windows
 ```powershell
 py -3.12 -m venv .venv
 .venv\Scripts\Activate.ps1
@@ -15,20 +16,36 @@ python -m pip install -r requirements.txt
 python app.py
 ```
 
+## Configure PostgreSQL for LAN mode
+Create a dedicated PostgreSQL database and application user, then set these environment variables before launching the application:
+
+```powershell
+$env:DB_BACKEND = "postgresql"
+$env:DATABASE_URL = "postgresql://tradedesk:YOUR_PASSWORD@SERVER_HOST:5432/tradedesk"
+python app.py
+```
+
+Do not commit database credentials to source control. Restrict PostgreSQL network access to trusted LAN clients and use a strong database password. The database user should have access only to the application database.
+
 On first launch, the setup wizard creates or adopts the first company and creates its administrator. Use a unique password of at least 12 characters. Existing unscoped business rows are assigned to the selected company in the same transaction; legacy user accounts are disabled because their password-hash formats cannot be trusted. Setup is marked complete atomically and cannot be run again through the application.
 
 ## Tests
 ```powershell
 python -m unittest discover -s tests -v
 ```
-GitHub Actions runs the unit suite on Python 3.11 and 3.12.
+GitHub Actions runs the SQLite unit suite on Python 3.11 and 3.12 and a PostgreSQL integration test against PostgreSQL 16. The integration test is skipped locally unless `TEST_DATABASE_URL` is set.
 
 ## Security and migration notes
 - Passwords are stored as Argon2id hashes using `argon2-cffi`; plaintext passwords are never persisted.
 - Built-in roles: `admin`, `manager`, `cashier`, `inventory`, and `viewer`.
-- Service methods require an authenticated session and check permissions before writes.
-- Migration v1 adds nullable `company_id` fields to legacy business tables. Existing rows are not guessed into a tenant until the one-time setup transaction explicitly backfills them.
-- The included database adapter is currently SQLite-only. PostgreSQL compatibility and a Windows executable are not claimed as verified in this branch; those require a PostgreSQL driver/backend implementation and a Windows build runner.
+- Authorization reloads role, active status, and company membership from the database at each service permission check.
+- Inventory, POS, customer, and supplier service methods filter data by the authenticated company.
+- Versioned migrations add nullable `company_id` fields. Existing rows are not assigned to a tenant until one-time setup explicitly backfills them.
+- Legacy user accounts are disabled during setup. Back up the database before upgrading and verify the migrated data before using it in production.
+- Global uniqueness constraints inherited from the original SQLite schema (for example item codes and invoice numbers) may still prevent different companies from reusing the same values. A follow-up migration is required to replace these with company-scoped unique constraints on existing SQLite databases.
+
+## Windows executable
+The Windows workflow builds a one-file executable and uploads it as a GitHub Actions artifact. Use the workflow run's artifact download rather than treating a source ZIP as the executable.
 
 ## License
 See [LICENSE](LICENSE).
