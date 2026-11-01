@@ -11,6 +11,7 @@ from services.security_service import (
 from services.inventory_service import add_item, stock_report
 from services.pos_service import create_invoice
 from services.party_service import create_customer, create_supplier, list_customers, list_suppliers
+from services.user_service import create_user, change_user_role, deactivate_user, list_users
 
 
 class SecurityServiceTests(unittest.TestCase):
@@ -99,6 +100,29 @@ class SecurityServiceTests(unittest.TestCase):
         conn.close()
         self.assertEqual([r["name"] for r in list_customers(session)], ["Own Customer"])
         self.assertEqual([r["name"] for r in list_suppliers(session)], ["Own Supplier"])
+
+    def test_user_administration_is_authorized_audited_and_company_scoped(self):
+        admin = self.setup_admin()
+        user_id = create_user("cashier1", "Strong-password-456!", role="cashier", session=admin)
+        users = list_users(admin)
+        self.assertIn("cashier1", [user["username"] for user in users])
+        self.assertNotIn("password_hash", users[0])
+        change_user_role(user_id, "viewer", session=admin)
+        conn = database.get_connection()
+        role = conn.execute("SELECT role FROM user_account WHERE id=?", (user_id,)).fetchone()["role"]
+        conn.close()
+        self.assertEqual(role, "viewer")
+        deactivate_user(user_id, session=admin)
+        with self.assertRaises(AuthenticationError):
+            authenticate("cashier1", "Strong-password-456!")
+        with self.assertRaises(ValueError):
+            deactivate_user(admin.user_id, session=admin)
+        conn = database.get_connection()
+        actions = {r["action"] for r in conn.execute(
+            "SELECT action FROM audit_log WHERE company_id=?", (admin.company_id,)
+        ).fetchall()}
+        conn.close()
+        self.assertTrue({"user_created", "user_role_changed", "user_deactivated"}.issubset(actions))
 
     def test_legacy_records_are_backfilled_during_setup(self):
         conn = database.get_connection()
