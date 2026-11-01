@@ -40,9 +40,9 @@ GitHub Actions runs the SQLite unit suite on Python 3.11 and 3.12 and a PostgreS
 - Built-in roles: `admin`, `manager`, `cashier`, `inventory`, and `viewer`.
 - Authorization reloads role, active status, and company membership from the database at each service permission check.
 - Inventory, POS, customer, and supplier service methods filter data by the authenticated company.
-- Versioned migrations add nullable `company_id` fields. Existing rows are not assigned to a tenant until one-time setup explicitly backfills them.
+- Versioned migrations add nullable `company_id` fields. Existing rows are not assigned to a tenant until one-time setup explicitly backfills them. Migration v4 rebuilds the SQLite item and invoice tables while preserving IDs and foreign-key references, then replaces global item-code and invoice-number uniqueness with company-scoped unique indexes.
 - Legacy user accounts are disabled during setup. Back up the database before upgrading and verify the migrated data before using it in production.
-- Global uniqueness constraints inherited from the original SQLite schema (for example item codes and invoice numbers) may still prevent different companies from reusing the same values. A follow-up migration is required to replace these with company-scoped unique constraints on existing SQLite databases.
+- Usernames remain globally unique and case-insensitive because login is username-only (there is no company selector at sign-in). Migration v3 detects legacy case-variant duplicate usernames and stops with an actionable error rather than silently choosing an account.
 
 ## Windows executable
 The Windows workflow builds a one-file executable and uploads it as a GitHub Actions artifact. Use the workflow run's artifact download rather than treating a source ZIP as the executable.
