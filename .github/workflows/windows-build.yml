@@ -20,7 +20,14 @@ jobs:
       - run: python -m pip install --upgrade pip
       - run: pip install -r requirements.txt
       - run: python -m unittest discover -s tests -v
-      - run: pyinstaller --noconfirm --clean --onefile --windowed --name TradeDeskPro app.py
+      - name: Build executable (embed vendor public key when provisioned)
+        shell: pwsh
+        run: |
+          if (Test-Path "public_key.pem") {
+            pyinstaller --noconfirm --clean --onefile --windowed --name TradeDeskPro --add-data "public_key.pem;." app.py
+          } else {
+            pyinstaller --noconfirm --clean --onefile --windowed --name TradeDeskPro app.py
+          }
       - uses: actions/upload-artifact@v4
         with:
           name: TradeDeskPro-Windows-x64
