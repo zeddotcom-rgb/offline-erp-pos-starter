@@ -1,4 +1,5 @@
 """Tenant-scoped inventory operations; all writes require an authorized session."""
+import json
 from database import get_connection
 from services.security_service import require_permission
 
@@ -22,6 +23,9 @@ def add_item(code, name, sale_price, purchase_price=0, stock_qty=0, category="Ge
                 (item_id, movement_type, quantity, reference_no, remarks, company_id)
                 VALUES (?, 'opening', ?, 'OPENING', 'Opening stock', ?)""",
                 (item_id, float(stock_qty), actor.company_id))
+        conn.execute("""INSERT INTO audit_log(entity_type, entity_id, action, details, company_id, actor_id)
+            VALUES ('item', ?, 'item_created', ?, ?, ?)""",
+            (item_id, json.dumps({"code": code, "name": name}), actor.company_id, actor.user_id))
         conn.commit()
         return item_id
     finally:
