@@ -99,7 +99,7 @@ def create_initial_setup(company: dict[str, str], username: str, password: str) 
             company_id = int(cur.lastrowid)
 
         # Legacy rows remain intact; they are assigned to the company explicitly during setup.
-        for table in ("customer", "supplier", "item", "item_price", "stock_move", "invoice", "invoice_item", "audit_log"):
+        for table in ("customer", "supplier", "item", "item_price", "stock_move", "invoice", "invoice_item", "license", "audit_log"):
             cols = get_columns(conn, table)
             if "company_id" in cols:
                 conn.execute(f"UPDATE {table} SET company_id=? WHERE company_id IS NULL", (company_id,))
