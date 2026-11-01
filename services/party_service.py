@@ -1,4 +1,5 @@
 """Company-scoped customer and supplier service methods."""
+import json
 from database import get_connection
 from services.security_service import require_permission
 
@@ -16,8 +17,12 @@ def create_customer(name, phone=None, email=None, gstin=None, credit_limit=0, se
             (name, phone, email, gstin, credit_limit, company_id)
             VALUES (?, ?, ?, ?, ?, ?)""",
             (name, phone, email, gstin, float(credit_limit), actor.company_id))
+        customer_id = int(cur.lastrowid)
+        conn.execute("""INSERT INTO audit_log(entity_type, entity_id, action, details, company_id, actor_id)
+            VALUES ('customer', ?, 'customer_created', ?, ?, ?)""",
+            (customer_id, json.dumps({"name": name}), actor.company_id, actor.user_id))
         conn.commit()
-        return int(cur.lastrowid)
+        return customer_id
     except Exception:
         conn.rollback()
         raise
@@ -46,8 +51,12 @@ def create_supplier(name, phone=None, email=None, gstin=None, session=None):
         cur = conn.execute("""INSERT INTO supplier
             (name, phone, email, gstin, company_id)
             VALUES (?, ?, ?, ?, ?)""", (name, phone, email, gstin, actor.company_id))
+        supplier_id = int(cur.lastrowid)
+        conn.execute("""INSERT INTO audit_log(entity_type, entity_id, action, details, company_id, actor_id)
+            VALUES ('supplier', ?, 'supplier_created', ?, ?, ?)""",
+            (supplier_id, json.dumps({"name": name}), actor.company_id, actor.user_id))
         conn.commit()
-        return int(cur.lastrowid)
+        return supplier_id
     except Exception:
         conn.rollback()
         raise
