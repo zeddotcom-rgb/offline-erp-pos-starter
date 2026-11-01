@@ -10,6 +10,7 @@ from services.security_service import (
 )
 from services.inventory_service import add_item, stock_report
 from services.pos_service import create_invoice
+from services.party_service import create_customer, create_supplier, list_customers, list_suppliers
 
 
 class SecurityServiceTests(unittest.TestCase):
@@ -85,6 +86,19 @@ class SecurityServiceTests(unittest.TestCase):
         self.assertEqual([item["code"] for item in stock_report(session)], ["OWN-1"])
         with self.assertRaises(ValueError):
             create_invoice("CROSS-TENANT", None, [{"item_id": other_item_id, "qty": 1, "rate": 1}], session=session)
+
+    def test_customer_and_supplier_lists_are_company_scoped(self):
+        session = self.setup_admin()
+        create_customer("Own Customer", phone="111", session=session)
+        create_supplier("Own Supplier", phone="222", session=session)
+        conn = database.get_connection()
+        other_company = conn.execute("INSERT INTO company(name) VALUES ('Other Tenant')").lastrowid
+        conn.execute("INSERT INTO customer(name, company_id) VALUES ('Foreign Customer', ?)", (other_company,))
+        conn.execute("INSERT INTO supplier(name, company_id) VALUES ('Foreign Supplier', ?)", (other_company,))
+        conn.commit()
+        conn.close()
+        self.assertEqual([r["name"] for r in list_customers(session)], ["Own Customer"])
+        self.assertEqual([r["name"] for r in list_suppliers(session)], ["Own Supplier"])
 
     def test_legacy_records_are_backfilled_during_setup(self):
         conn = database.get_connection()
