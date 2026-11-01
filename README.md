@@ -47,7 +47,7 @@ GitHub Actions runs the SQLite unit suite on Python 3.11 and 3.12 and a PostgreS
 ## License-key provisioning (release gate)
 The application fails closed when the issuer's `public_key.pem` is missing; it never creates a signing key during license verification. Before a commercial release:
 
-1. On a trusted vendor-only machine, generate the keypair once with `python keygen.py --customer "Key Setup" --edition professional --generate-keypair --machine-fingerprint "PLACEHOLDER"` only after confirming the command's issuer-side use. Do not issue the placeholder license.
+1. On a trusted vendor-only machine, generate the keypair once with `python keygen.py --generate-keypair-only`.
 2. Keep `private_key.pem` offline, access-controlled and backed up. Never commit or distribute it.
 3. Provision the matching `public_key.pem` alongside the Windows executable (or set `TRADEDESK_LICENSE_PUBLIC_KEY` to its path).
 4. Issue each customer's license using their supplied machine fingerprint with `--machine-fingerprint`.
