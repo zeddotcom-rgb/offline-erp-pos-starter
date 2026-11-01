@@ -3,6 +3,7 @@ import json
 import tkinter as tk
 from tkinter import ttk, messagebox
 
+from config import LICENSE_FILE_PATH
 from database import init_db, get_connection
 from migrations import migrate
 from services.security_service import (
