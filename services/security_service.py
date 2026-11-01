@@ -2,14 +2,13 @@
 from __future__ import annotations
 
 import json
-import sqlite3
 from dataclasses import dataclass
 from typing import Any
 
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerificationError, VerifyMismatchError
 
-from database import get_connection
+from database import get_connection, get_columns, table_exists
 
 _PASSWORDS = PasswordHasher(time_cost=3, memory_cost=65536, parallelism=2)
 ROLE_PERMISSIONS = {
@@ -44,14 +43,10 @@ class Session:
         return {"user_id": self.user_id, "username": self.username, "role": self.role, "company_id": self.company_id}
 
 
-def _columns(conn: sqlite3.Connection, table: str) -> set[str]:
-    return {row["name"] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
-
-
 def setup_is_complete() -> bool:
     conn = get_connection()
     try:
-        if not conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='setup_state'").fetchone():
+        if not table_exists(conn, "setup_state"):
             return False
         row = conn.execute("SELECT setup_completed FROM setup_state WHERE id = 1").fetchone()
         return bool(row and row["setup_completed"])
@@ -105,10 +100,10 @@ def create_initial_setup(company: dict[str, str], username: str, password: str) 
 
         # Legacy rows remain intact; they are assigned to the company explicitly during setup.
         for table in ("customer", "supplier", "item", "item_price", "stock_move", "invoice", "invoice_item", "audit_log"):
-            cols = _columns(conn, table)
+            cols = get_columns(conn, table)
             if "company_id" in cols:
                 conn.execute(f"UPDATE {table} SET company_id=? WHERE company_id IS NULL", (company_id,))
-        if "company_id" in _columns(conn, "user_account"):
+        if "company_id" in get_columns(conn, "user_account"):
             conn.execute("UPDATE user_account SET is_active=0, company_id=? WHERE company_id IS NULL", (company_id,))
         else:
             conn.execute("UPDATE user_account SET is_active=0")
@@ -160,7 +155,7 @@ def authenticate(username: str, password: str) -> Session:
         conn.close()
 
 
-def _audit_login_failure(conn: sqlite3.Connection, username: str) -> None:
+def _audit_login_failure(conn, username: str) -> None:
     conn.execute("""INSERT INTO audit_log(entity_type, action, details)
         VALUES ('security', 'login_failed', ?)""", (json.dumps({"username": username[:80]}),))
 
