@@ -2,6 +2,8 @@ name: Windows executable
 on:
   workflow_dispatch:
   push:
+    branches:
+      - "release/0.5.0-security-company-setup"
     tags:
       - "v0.5.0*"
 jobs:
