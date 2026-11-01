@@ -105,7 +105,7 @@ class ERPApp:
 
     def load_license_from_file(self):
         try:
-            with open("license.json", "r", encoding="utf-8") as f:
+            with open(LICENSE_FILE_PATH, "r", encoding="utf-8") as f:
                 self.license = json.load(f)
             machine = generate_machine_fingerprint()
             self.license_status = "VALID" if is_license_valid(self.license, machine) else "INVALID"
