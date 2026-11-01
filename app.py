@@ -199,7 +199,7 @@ class ERPApp:
             if item:
                 items.append({"item_id": item["id"], "qty": float(qty), "rate": float(rate), "discount": 0, "tax_rate": 0})
         try:
-            result = create_invoice(invoice_no, 1, items, payment_mode="cash", session=self.session)
+            result = create_invoice(invoice_no, None, items, payment_mode="cash", session=self.session)
         except (ValueError, PermissionError) as exc:
             messagebox.showerror("Invoice failed", str(exc), parent=self.root)
             return
