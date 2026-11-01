@@ -41,6 +41,18 @@ def migrate() -> None:
             if "company_id" not in get_columns(conn, "license"):
                 conn.execute("ALTER TABLE license ADD COLUMN company_id INTEGER")
             conn.execute("INSERT INTO schema_migration(version) VALUES (2)")
+        # Login is username-only, so case variants must not resolve ambiguously.
+        if 3 not in versions:
+            duplicates = conn.execute("""SELECT LOWER(username) AS normalized, COUNT(*) AS n
+                FROM user_account GROUP BY LOWER(username) HAVING COUNT(*) > 1""").fetchall()
+            if duplicates:
+                names = ", ".join(row["normalized"] for row in duplicates[:5])
+                raise RuntimeError(
+                    "Cannot apply migration v3: usernames differ only by letter case "
+                    f"({names}). Resolve duplicate accounts before retrying."
+                )
+            conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_user_account_username_lower ON user_account (LOWER(username))")
+            conn.execute("INSERT INTO schema_migration(version) VALUES (3)")
         conn.commit()
     except Exception:
         conn.rollback()
