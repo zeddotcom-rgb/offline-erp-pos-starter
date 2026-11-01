@@ -24,9 +24,9 @@ jobs:
         shell: pwsh
         run: |
           if (Test-Path "public_key.pem") {
-            pyinstaller --noconfirm --clean --onefile --windowed --name TradeDeskPro --add-data "public_key.pem;." app.py
+            pyinstaller --noconfirm --clean --onefile --windowed --name TradeDeskPro --add-data "schema.sql;." --add-data "schema_postgres.sql;." --add-data "public_key.pem;." app.py
           } else {
-            pyinstaller --noconfirm --clean --onefile --windowed --name TradeDeskPro app.py
+            pyinstaller --noconfirm --clean --onefile --windowed --name TradeDeskPro --add-data "schema.sql;." --add-data "schema_postgres.sql;." app.py
           }
       - uses: actions/upload-artifact@v4
         with:
