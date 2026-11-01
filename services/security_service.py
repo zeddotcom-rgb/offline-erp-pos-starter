@@ -131,7 +131,7 @@ def authenticate(username: str, password: str) -> Session:
     conn = get_connection()
     try:
         row = conn.execute("""SELECT id, username, password_hash, role, company_id, is_active
-            FROM user_account WHERE username = ? COLLATE NOCASE""", (username.strip(),)).fetchone()
+            FROM user_account WHERE LOWER(username) = LOWER(?)""", (username.strip(),)).fetchone()
         if not row or not row["is_active"] or not row["company_id"]:
             _audit_login_failure(conn, username)
             conn.commit()
