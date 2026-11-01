@@ -41,6 +41,12 @@ class LicensingSecurityTests(unittest.TestCase):
         self.assertTrue(self.private.exists())
         self.assertTrue(self.public.exists())
 
+    def test_invalid_existing_keypair_is_rejected(self):
+        self.private.write_text("not a private key", encoding="utf-8")
+        self.public.write_text("not a public key", encoding="utf-8")
+        with self.assertRaisesRegex(RuntimeError, "invalid or mismatched"):
+            licensing.ensure_keys()
+
     def test_partial_keypair_is_not_overwritten(self):
         self.public.write_text("existing public key", encoding="utf-8")
         with self.assertRaisesRegex(RuntimeError, "Restore the matching keypair"):
